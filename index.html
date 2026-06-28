@@ -295,6 +295,47 @@ canvas { display: block; cursor: crosshair; }
   background:rgba(0,0,0,0.75); padding:12px 20px;
   border:1px solid #ffff0055;
 }
+/* Briefing screen */
+#briefingScreen {
+  position:absolute; top:0; left:0; width:100%; height:100%;
+  background:rgba(0,0,0,0.95);
+  display:none; flex-direction:column;
+  align-items:center; justify-content:center;
+  z-index:55; gap:18px;
+  animation: none;
+}
+@keyframes briefingFadeIn {
+  from { opacity:0; transform:scale(0.95); }
+  to   { opacity:1; transform:scale(1); }
+}
+@keyframes briefingFadeOut {
+  from { opacity:1; }
+  to   { opacity:0; }
+}
+.briefing-name {
+  font-size:26px; color:#00ffff;
+  text-shadow:0 0 30px #00ffff, 0 0 60px #0088ff;
+  letter-spacing:4px; text-align:center;
+}
+.briefing-sub {
+  font-size:9px; color:#ffffff99; letter-spacing:3px; text-align:center;
+}
+/* atmoScreen launch button */
+#launchBtn {
+  font-family:'Press Start 2P',monospace; font-size:11px;
+  padding:14px 40px; border:none; border-radius:50px;
+  background:linear-gradient(90deg,#00ffaa,#00aaff);
+  color:#001a1a; cursor:pointer; letter-spacing:2px;
+  transition:all 0.18s; pointer-events:all;
+  box-shadow:0 0 20px #00ffaa88;
+  margin-top:28px;
+}
+#launchBtn:hover { transform:scale(1.06); box-shadow:0 0 40px #00ffaa; }
+#launchBtn:disabled { opacity:0.4; cursor:not-allowed; }
+/* atmo card selected state */
+.atmo-card.selected.space { border-color:#00ffff; box-shadow:0 0 30px #00ffff; }
+.atmo-card.selected.earth { border-color:#44ff44; box-shadow:0 0 30px #44ff44; }
+.atmo-card.selected.fantasy { border-color:#ff44ff; box-shadow:0 0 30px #ff44ff; }
 </style>
 </head>
 <body>
@@ -348,24 +389,7 @@ canvas { display: block; cursor: crosshair; }
     <div class="title-sep"></div>
     <div class="name-input-wrap">
       <input id="playerNameInput" type="text" maxlength="16" placeholder="COMMANDER" autocomplete="off" spellcheck="false">
-      <button id="startBtn">ENGAGE →</button>
-    </div>
-    <div class="mode-cards-row">
-      <div class="mode-card space" data-atmo="space">
-        <div class="mode-icon">🚀</div>
-        <div class="mode-name">SPACE</div>
-        <div class="mode-desc">Deep cosmos. Asteroids. Rocket ship.</div>
-      </div>
-      <div class="mode-card earth" data-atmo="earth">
-        <div class="mode-icon">✈️</div>
-        <div class="mode-name">EARTH</div>
-        <div class="mode-desc">Sky combat. Enemy planes. Fighter jet.</div>
-      </div>
-      <div class="mode-card fantasy" data-atmo="fantasy">
-        <div class="mode-icon">🐉</div>
-        <div class="mode-name">FANTASY</div>
-        <div class="mode-desc">Magic realm. Dragon rider. Creatures.</div>
-      </div>
+      <button id="startBtn">NEXT →</button>
     </div>
     <div class="controls-hint">
       MOVE: WASD / ARROW KEYS &nbsp;|&nbsp; SHOOT: SPACE or LEFT CLICK<br>
@@ -374,7 +398,8 @@ canvas { display: block; cursor: crosshair; }
   </div>
   <!-- Atmosphere selection (kept for atmoScreen path) -->
   <div id="atmoScreen" style="display:none;">
-    <div class="atmo-title">SELECT YOUR BATTLEFIELD</div>
+    <div class="game-title" style="font-size:20px;margin-bottom:4px;">NOVA STRIKE</div>
+    <div class="atmo-title">CHOOSE YOUR BATTLEFIELD</div>
     <div class="atmo-cards">
       <div class="atmo-card space" data-atmo="space">
         <div class="atmo-icon">🚀</div><div class="atmo-name">SPACE</div>
@@ -389,11 +414,17 @@ canvas { display: block; cursor: crosshair; }
         <div class="atmo-desc">Magic realm. Dragon rider. Creatures.</div>
       </div>
     </div>
+    <button id="launchBtn" disabled>🚀 LAUNCH MISSION</button>
   </div>
   <!-- Countdown -->
   <div id="countdownScreen" style="display:none;">
     <div id="countdownNum">3</div>
     <div id="countdownLabel">GET READY</div>
+  </div>
+  <!-- Briefing Screen -->
+  <div id="briefingScreen" style="display:none;">
+    <div class="briefing-name" id="briefingNameLabel">GOOD LUCK, COMMANDER!</div>
+    <div class="briefing-sub">ACCOMPLISH THE MISSION, COMMANDER.</div>
   </div>
   <!-- Death Screen -->
   <div id="deathScreen" style="display:none;">
@@ -581,6 +612,11 @@ let powerDropTimer = 0;
 let gameRunning = false;
 let gamePaused = false;
 let bossIncomingWarned = false;
+let bossKillAnim = false;
+let bossKillTimer = 0;
+let bossKillBx = 0;
+let bossKillBy = 0;
+let selectedAtmo = 'space';
 
 // ---- Player ----
 let player = {
@@ -705,8 +741,8 @@ function drawPlayer() {
   // Shield bubble
   if (player.shieldActive) {
     ctx.save();
-    ctx.beginPath(); ctx.arc(px,py,36,0,Math.PI*2);
-    const sg=ctx.createRadialGradient(px,py,20,px,py,36);
+    ctx.beginPath(); ctx.arc(px,py,46,0,Math.PI*2);
+    const sg=ctx.createRadialGradient(px,py,28,px,py,46);
     sg.addColorStop(0,'rgba(0,255,255,0.0)');
     sg.addColorStop(0.7,'rgba(0,255,255,0.15)');
     sg.addColorStop(1,'rgba(0,255,255,0.6)');
@@ -717,6 +753,7 @@ function drawPlayer() {
   }
   ctx.save(); ctx.translate(px,py);
   if (player.invincible>0 && Math.floor(player.invincible/3)%2===0) ctx.globalAlpha=0.3;
+  ctx.scale(1.45,1.45);
   if (atmosphere==='space') {
     ctx.fillStyle='#ccccff';
     ctx.beginPath(); ctx.moveTo(0,-24); ctx.lineTo(12,8); ctx.lineTo(6,8);
@@ -981,6 +1018,7 @@ function handleBossDeath() {
   score+=200+level*50;
   playExplosion();
   triggerShake(10,40);
+  bossKillAnim=true; bossKillTimer=0; bossKillBx=boss.x; bossKillBy=boss.y;
   bossActive=false; boss=null;
   bossTimer=0;
   bossIncomingWarned=false;
@@ -1406,6 +1444,8 @@ function updateGame() {
 
   // Combo timer
   if(comboTimer>0){comboTimer--;if(comboTimer<=0)comboCount=0;}
+  // Boss kill animation timer
+  if(bossKillAnim){bossKillTimer++;if(bossKillTimer>=120)bossKillAnim=false;}
   updateParticles(); updateBgLayers(); updateHUD();
 }
 
@@ -1416,6 +1456,37 @@ function drawFrame() {
   drawBgLayers(); drawParticles();
   enemies.forEach(e=>drawEnemy(e));
   drawBoss(); drawPowerups(); drawBullets(); drawPlayer();
+  if(bossKillAnim) drawBossKillAnim();
+  ctx.restore();
+}
+
+// ---- Boss Kill Animation ----
+function drawBossKillAnim() {
+  const alpha=Math.sin(bossKillTimer/120*Math.PI);
+  // Radial golden pulse ring
+  ctx.save();
+  ctx.globalAlpha=(1-bossKillTimer/120)*0.8;
+  ctx.beginPath();
+  ctx.arc(bossKillBx,bossKillBy,bossKillTimer*3,0,Math.PI*2);
+  ctx.strokeStyle='#ffdd00';
+  ctx.lineWidth=4;
+  ctx.shadowBlur=20;
+  ctx.shadowColor='#ffdd00';
+  ctx.stroke();
+  ctx.restore();
+  // "BOSS DEFEATED!" text
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  ctx.font="20px 'Press Start 2P',monospace";
+  ctx.fillStyle='#ffff00';
+  ctx.shadowBlur=20; ctx.shadowColor='#ffff00';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('BOSS DEFEATED!',W/2,260);
+  // "LEVEL UP!" text
+  ctx.font="14px 'Press Start 2P',monospace";
+  ctx.fillStyle='#00ffff';
+  ctx.shadowColor='#00ffff';
+  ctx.fillText('LEVEL UP!',W/2,300);
   ctx.restore();
 }
 
@@ -1505,7 +1576,7 @@ function startCountdown(atmo) {
 // ---- Landing background animation ----
 let landingBgInit=false;
 function animateLandingBg() {
-  if(state!=='landing'&&state!=='atmo') return;
+  if(state!=='landing'&&state!=='atmo'&&state!=='briefing') return;
   if(!landingBgInit){atmosphere='space';initBgLayers();landingBgInit=true;}
   drawBgLayers(); updateBgLayers();
   requestAnimationFrame(animateLandingBg);
@@ -1514,25 +1585,18 @@ animateLandingBg();
 startBgMusic('menu');
 
 // ---- UI Events ----
-// Landing screen mode cards — direct launch
-document.querySelectorAll('.mode-card').forEach(card=>{
-  card.addEventListener('click',()=>{
-    const name=document.getElementById('playerNameInput').value.trim();
-    playerName=name||'COMMANDER';
-    checkpoint=1; totalKills=0; maxCombo=0; score=0; level=1;
-    state='countdown';
-    document.getElementById('landingScreen').style.display='none';
-    startCountdown(card.dataset.atmo);
-  });
-});
-
+// Landing screen: startBtn now only moves to atmo selection
 document.getElementById('startBtn').addEventListener('click',()=>{
   const name=document.getElementById('playerNameInput').value.trim();
   playerName=name||'COMMANDER';
   checkpoint=1; totalKills=0; maxCombo=0; score=0; level=1;
+  selectedAtmo='space';
   state='atmo';
   document.getElementById('landingScreen').style.display='none';
   document.getElementById('atmoScreen').style.display='flex';
+  // reset any previous selection
+  document.querySelectorAll('.atmo-card').forEach(c=>c.classList.remove('selected'));
+  document.getElementById('launchBtn').disabled=true;
   function atmoAnim(){if(state!=='atmo')return;drawBgLayers();updateBgLayers();requestAnimationFrame(atmoAnim);}
   atmoAnim();
 });
@@ -1542,7 +1606,12 @@ document.getElementById('playerNameInput').addEventListener('keydown',e=>{
 });
 
 document.querySelectorAll('.atmo-card').forEach(card=>{
-  card.addEventListener('click',()=>{state='countdown';startCountdown(card.dataset.atmo);});
+  card.addEventListener('click',()=>{
+    selectedAtmo=card.dataset.atmo;
+    document.querySelectorAll('.atmo-card').forEach(c=>c.classList.remove('selected'));
+    card.classList.add('selected');
+    document.getElementById('launchBtn').disabled=false;
+  });
   const titleColors={space:'#00ffff',earth:'#44ff44',fantasy:'#ff88ff'};
   card.addEventListener('mouseenter',()=>{
     const t=document.querySelector('.atmo-title');
@@ -1554,6 +1623,34 @@ document.querySelectorAll('.atmo-card').forEach(card=>{
     t.style.color='#fff'; t.style.textShadow='0 0 10px #fff';
   });
 });
+
+document.getElementById('launchBtn').addEventListener('click',()=>{
+  if(!selectedAtmo) return;
+  showBriefingScreen(selectedAtmo);
+});
+
+function showBriefingScreen(atmo) {
+  const atmoColors={space:'#00ffff',earth:'#44ff44',fantasy:'#ff88ff'};
+  const color=atmoColors[atmo]||'#00ffff';
+  const nameLabel=document.getElementById('briefingNameLabel');
+  nameLabel.textContent='GOOD LUCK, '+playerName.toUpperCase()+'!';
+  nameLabel.style.color=color;
+  nameLabel.style.textShadow=`0 0 30px ${color}, 0 0 60px ${color}`;
+  const bs=document.getElementById('briefingScreen');
+  bs.style.display='flex';
+  bs.style.opacity='0';
+  bs.style.animation='briefingFadeIn 0.4s ease forwards';
+  state='briefing';
+  // After 2.5s: fade out then start countdown
+  setTimeout(()=>{
+    bs.style.animation='briefingFadeOut 0.3s ease forwards';
+    setTimeout(()=>{
+      bs.style.display='none';
+      state='countdown';
+      startCountdown(atmo);
+    },300);
+  },2200);
+}
 
 document.getElementById('resumeBtn').addEventListener('click',()=>{
   document.getElementById('deathScreen').style.display='none';
