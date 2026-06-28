@@ -21,7 +21,7 @@ body {
   width: 800px;
   height: 600px;
 }
-canvas { display: block; }
+canvas { display: block; cursor: crosshair; }
 #crtOverlay {
   position: absolute;
   top: 0; left: 0;
@@ -253,20 +253,21 @@ canvas { display: block; }
   align-items: center;
   gap: 5px;
 }
-/* Combo display */
+/* Combo display — moved to top-center, out of play area */
 #comboDisplay {
   position: absolute;
-  top: 50%;
+  top: 58px;
   left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 28px;
+  transform: translateX(-50%) scale(1);
+  font-size: 18px;
   color: #ffff00;
   text-shadow: 0 0 20px #ffff00, 0 0 40px #ff8800;
   pointer-events: none;
   opacity: 0;
   z-index: 30;
-  transition: opacity 0.3s;
+  transition: opacity 0.25s, transform 0.15s;
   letter-spacing: 3px;
+  white-space: nowrap;
 }
 /* Boss HP bar */
 #bossBar {
@@ -285,6 +286,111 @@ canvas { display: block; }
 #bossName { font-size: 8px; color: #ff4444; text-shadow: 0 0 10px #ff4444; }
 .boss-bar-bg { width: 100%; height: 16px; background: rgba(255,0,0,0.2); border: 1px solid #ff4444; }
 #bossFill { height: 100%; background: #ff2222; transition: width 0.2s; }
+
+/* Boss warning banner */
+#bossWarning {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 20px;
+  color: #ff2222;
+  text-shadow: 0 0 20px #ff2222, 0 0 40px #ff0000;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 60;
+  letter-spacing: 4px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Pause overlay */
+#pauseOverlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.78);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 80;
+  gap: 20px;
+}
+.pause-title {
+  font-size: 32px;
+  color: #00ffff;
+  text-shadow: 0 0 20px #00ffff;
+  letter-spacing: 6px;
+}
+.pause-hint {
+  font-size: 9px;
+  color: #ffffff66;
+  letter-spacing: 3px;
+}
+
+/* Power badge — expiry flash */
+@keyframes powerFlash {
+  0%,100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+.power-badge.expiring { animation: powerFlash 0.4s ease infinite; }
+
+/* HUD improvements */
+.bar-bg {
+  height: 16px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid #ffffff33;
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  border-radius: 2px;
+}
+.hud-top { height: 32px; }
+.hud-label { font-size: 8px; }
+.hud-score { font-size: 10px; }
+
+/* Death screen fade-in */
+@keyframes deathFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+#deathScreen.visible { animation: deathFadeIn 0.5s ease forwards; }
+
+/* Controls hint on landing */
+.controls-hint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 7px;
+  color: #ffffff44;
+  letter-spacing: 2px;
+  text-align: center;
+  line-height: 2;
+  pointer-events: none;
+}
+
+/* Name input focus */
+#playerNameInput:focus {
+  box-shadow: 0 0 25px #00ffff88, 0 0 5px #00ffff inset;
+  border-color: #88ffff;
+}
+/* Start button focus */
+.neon-btn:focus {
+  outline: none;
+  box-shadow: 0 0 25px #00ffff, 0 0 5px #00ffff inset;
+}
+
+/* Atmosphere title hover tint */
+.atmo-title { transition: color 0.3s, text-shadow 0.3s; }
+
+/* Live highscore pulse when beaten */
+@keyframes hsPulse {
+  0%,100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+.hud-best.newhs { animation: hsPulse 0.4s ease 3; color: #00ff44 !important; text-shadow: 0 0 12px #00ff44 !important; }
 </style>
 </head>
 <body>
@@ -315,7 +421,14 @@ canvas { display: block; }
     <span id="bossName">⚠ BOSS</span>
     <div class="boss-bar-bg"><div id="bossFill" style="width:100%;"></div></div>
   </div>
+  <div id="bossWarning"></div>
   <div id="comboDisplay"></div>
+  <!-- Pause overlay -->
+  <div id="pauseOverlay">
+    <div class="pause-title">PAUSED</div>
+    <div class="pause-hint">PRESS P TO RESUME</div>
+    <button class="neon-btn" id="resumePauseBtn" style="margin-top:10px;">RESUME</button>
+  </div>
   <!-- Screens -->
   <div id="landingScreen">
     <div class="game-title">NOVA STRIKE</div>
@@ -324,6 +437,10 @@ canvas { display: block; }
       <div class="name-label">ENTER YOUR NAME, COMMANDER</div>
       <input id="playerNameInput" type="text" maxlength="16" placeholder="COMMANDER" autocomplete="off" spellcheck="false">
       <button class="neon-btn" id="startBtn">ENGAGE →</button>
+    </div>
+    <div class="controls-hint">
+      MOVE: WASD / ARROW KEYS &nbsp;|&nbsp; SHOOT: SPACE or LEFT CLICK<br>
+      PAUSE: P &nbsp;|&nbsp; COLLECT POWERUPS BY FLYING OVER THEM
     </div>
   </div>
   <div id="atmoScreen" style="display:none;">
@@ -469,8 +586,36 @@ let player = {
 
 // ---- Input ----
 const keys = {};
-document.addEventListener('keydown', e => { keys[e.code] = true; if(e.code==='Space') e.preventDefault(); });
+let mouseDown = false;
+let gamePaused = false;
+
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Space') e.preventDefault();
+  if (e.code === 'KeyP' && gameRunning) togglePause();
+});
 document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// Mouse / left-click shooting
+canvas.addEventListener('mousedown', e => { if (e.button === 0) { mouseDown = true; e.preventDefault(); } });
+canvas.addEventListener('mouseup',   e => { if (e.button === 0) mouseDown = false; });
+canvas.addEventListener('mouseleave', () => { mouseDown = false; });
+
+function togglePause() {
+  gamePaused = !gamePaused;
+  const overlay = document.getElementById('pauseOverlay');
+  if (gamePaused) {
+    overlay.style.display = 'flex';
+    stopBgDrone();
+  } else {
+    overlay.style.display = 'none';
+    startBgDrone(atmosphere);
+    requestAnimationFrame(gameLoop);
+  }
+}
+document.getElementById('resumePauseBtn').addEventListener('click', () => {
+  if (gamePaused) togglePause();
+});
 
 // ---- Collections ----
 let enemies = [];
@@ -828,9 +973,23 @@ function spawnBoss() {
     angle: 0,
   };
   playBossArrive();
+  // Show warning banner
+  showBossWarning();
   const bd = document.getElementById('bossBar');
   bd.style.display='flex';
   updateBossBar();
+}
+
+function showBossWarning() {
+  const el = document.getElementById('bossWarning');
+  el.textContent = '⚠  BOSS INCOMING  ⚠';
+  let flashes = 0;
+  el.style.opacity = '1';
+  const iv = setInterval(() => {
+    flashes++;
+    el.style.opacity = el.style.opacity === '0' ? '1' : '0';
+    if (flashes >= 10) { clearInterval(iv); el.style.opacity = '0'; }
+  }, 250);
 }
 function updateBossBar() {
   if (!boss) return;
@@ -1030,11 +1189,12 @@ function updatePowerHud() {
   activePowers.forEach(p => {
     const secs = Math.ceil(p.timer/60);
     const div = document.createElement('div');
-    div.className = 'power-badge';
+    div.className = 'power-badge' + (p.timer > 0 && p.timer <= 120 ? ' expiring' : '');
     div.style.borderColor = p.color;
     div.style.color = p.color;
     div.style.textShadow = `0 0 8px ${p.color}`;
-    div.innerHTML = `${p.icon} ${secs}s`;
+    div.style.background = `${p.color}11`;
+    div.innerHTML = `${p.icon} <span style="font-size:8px;">${secs}s</span>`;
     hud.appendChild(div);
   });
 }
@@ -1117,7 +1277,16 @@ function updateHUD() {
   document.getElementById('lvLabel').textContent = 'LV '+level;
   document.getElementById('scoreLabel').textContent = score;
   document.getElementById('cdrLabel').textContent = 'CDR. '+playerName.toUpperCase().slice(0,12);
-  document.getElementById('bestLabel').textContent = 'BEST: '+highScore;
+
+  // Live highscore: update if current session beats it
+  const bestEl = document.getElementById('bestLabel');
+  const displayBest = Math.max(highScore, score);
+  bestEl.textContent = 'BEST: '+displayBest;
+  if (score > highScore && !bestEl._pulsed) {
+    bestEl._pulsed = true;
+    bestEl.classList.add('newhs');
+    setTimeout(()=>{ bestEl.classList.remove('newhs'); bestEl._pulsed = false; }, 1400);
+  }
 }
 
 // ---- Combo System ----
@@ -1134,12 +1303,12 @@ function showCombo(n) {
   const el = document.getElementById('comboDisplay');
   el.textContent = n+'x COMBO!';
   el.style.opacity = '1';
-  el.style.transform = 'translate(-50%,-50%) scale(1.2)';
-  el.style.fontSize = Math.min(20+n*4, 48)+'px';
+  el.style.transform = 'translateX(-50%) scale(1.2)';
+  el.style.fontSize = Math.min(16+n*3, 36)+'px';
   clearTimeout(el._t);
   el._t = setTimeout(()=>{
     el.style.opacity='0';
-    el.style.transform='translate(-50%,-50%) scale(1)';
+    el.style.transform='translateX(-50%) scale(1)';
   }, 700);
 }
 
@@ -1170,11 +1339,15 @@ function checkLevel() {
   }
 }
 function showLevelUpBanner() {
+  // Remove any existing level-up banner to prevent stacking
+  const existing = document.getElementById('levelUpBanner');
+  if (existing) existing.remove();
   const el = document.createElement('div');
-  el.style.cssText = `position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  el.id = 'levelUpBanner';
+  el.style.cssText = `position:absolute;top:42%;left:50%;transform:translate(-50%,-50%);
     font-family:'Press Start 2P',monospace;font-size:22px;color:#ffff00;
     text-shadow:0 0 20px #ffff00;z-index:60;pointer-events:none;
-    animation:fadeIn 0.3s ease;`;
+    animation:fadeIn 0.3s ease;text-align:center;`;
   el.textContent = 'LEVEL '+level+'!';
   document.getElementById('gameContainer').appendChild(el);
   setTimeout(()=>el.remove(), 1500);
@@ -1212,7 +1385,7 @@ function updateGame() {
   // --- Player shoot ---
   const fr = player.rapidFireTimer > 0 ? Math.floor(player.fireRate/2) : player.fireRate;
   if (player.fireCooldown > 0) player.fireCooldown--;
-  if ((keys['Space']) && player.fireCooldown <= 0) {
+  if ((keys['Space'] || mouseDown) && player.fireCooldown <= 0) {
     player.fireCooldown = fr;
     playerBullets.push({ x: player.x, y: player.y-24, vy: -10 });
     if (player.rapidFireTimer > 0) {
@@ -1389,7 +1562,7 @@ function drawFrame() {
 // ---- Game Loop ----
 let lastTime = 0;
 function gameLoop(ts) {
-  if (!gameRunning) return;
+  if (!gameRunning || gamePaused) return;
   updateGame();
   drawFrame();
   requestAnimationFrame(gameLoop);
@@ -1398,6 +1571,8 @@ function gameLoop(ts) {
 // ---- Game Over ----
 function gameOver() {
   gameRunning = false;
+  gamePaused = false;
+  document.getElementById('pauseOverlay').style.display = 'none';
   stopBgDrone();
   // Update highscore
   if (score > highScore) {
@@ -1412,10 +1587,15 @@ function gameOver() {
   document.getElementById('dCombo').textContent = maxCombo+'x';
   document.getElementById('dCheckpoint').textContent = 'LV '+checkpoint+' SAVED';
   document.getElementById('resumeBtn').textContent = 'RESUME FROM LV'+checkpoint;
-  document.getElementById('deathScreen').style.display='flex';
+  const ds = document.getElementById('deathScreen');
+  ds.style.display='flex';
+  ds.classList.remove('visible');
+  void ds.offsetWidth;
+  ds.classList.add('visible');
   document.getElementById('hud').style.display='none';
   document.getElementById('bossBar').style.display='none';
   document.getElementById('comboDisplay').style.opacity='0';
+  mouseDown = false;
 }
 
 function startGameFrom(fromLevel) {
@@ -1446,6 +1626,9 @@ function startGameFrom(fromLevel) {
   spawnTimer = 40;
   powerDropTimer = 300;
   shakeTimer = 0; shakeAmt = 0;
+  mouseDown = false;
+  gamePaused = false;
+  document.getElementById('pauseOverlay').style.display='none';
   document.getElementById('bossBar').style.display='none';
   document.getElementById('comboDisplay').style.opacity='0';
   document.getElementById('powerupHud').innerHTML='';
@@ -1566,6 +1749,18 @@ document.querySelectorAll('.atmo-card').forEach(card => {
     state = 'countdown';
     startCountdown(card.dataset.atmo);
   });
+  // Title color hint on hover
+  const titleColors = { space:'#00ffff', earth:'#44ff44', fantasy:'#ff88ff' };
+  card.addEventListener('mouseenter', () => {
+    const t = document.querySelector('.atmo-title');
+    t.style.color = titleColors[card.dataset.atmo];
+    t.style.textShadow = `0 0 15px ${titleColors[card.dataset.atmo]}`;
+  });
+  card.addEventListener('mouseleave', () => {
+    const t = document.querySelector('.atmo-title');
+    t.style.color = '#fff';
+    t.style.textShadow = '0 0 10px #fff';
+  });
 });
 
 document.getElementById('resumeBtn').addEventListener('click', () => {
@@ -1588,6 +1783,8 @@ document.getElementById('startOverBtn').addEventListener('click', () => {
 document.getElementById('menuBtn').addEventListener('click', () => {
   checkpoint = 1; level=1; score=0; totalKills=0; maxCombo=0;
   state = 'landing';
+  mouseDown = false;
+  gamePaused = false;
   document.getElementById('deathScreen').style.display='none';
   document.getElementById('hud').style.display='none';
   document.getElementById('landingScreen').style.display='flex';
